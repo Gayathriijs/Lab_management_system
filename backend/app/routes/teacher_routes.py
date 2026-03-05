@@ -13,6 +13,50 @@ from datetime import datetime
 teacher_bp = Blueprint('teacher', __name__, url_prefix='/api/teacher')
 
 
+# ==================== LABS MANAGEMENT ====================
+
+@teacher_bp.route('/labs', methods=['GET'])
+@token_required
+@role_required(['teacher'])
+def get_managed_labs(current_user):
+    """
+    Get all labs managed by the current teacher.
+    
+    Response:
+        {
+            "labs": [
+                {
+                    "id": 1,
+                    "name": "Data Structures Lab",
+                    "code": "CSE201L",
+                    "semester": 3,
+                    "student_count": 45
+                }
+            ]
+        }
+    """
+    try:
+        query = """
+            SELECT 
+                l.id,
+                l.name,
+                l.code,
+                l.semester,
+                COUNT(DISTINCT le.student_id) as student_count
+            FROM labs l
+            LEFT JOIN lab_enrollments le ON l.id = le.lab_id
+            WHERE l.teacher_id = %s
+            GROUP BY l.id
+            ORDER BY l.semester
+        """
+        labs = Database.execute_query(query, (current_user['id'],), fetch_all=True)
+        
+        return jsonify({'labs': labs}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== SYLLABUS MANAGEMENT ====================
 
 @teacher_bp.route('/syllabus/upload', methods=['POST'])
@@ -146,9 +190,16 @@ def create_experiment(current_user):
         description = request.form.get('description')
         experiment_date = request.form.get('experiment_date')
         
-        # Validate required fields
-        if not all([lab_id, title, experiment_date]):
-            return jsonify({'error': 'Missing required fields'}), 400
+        # Debug logging
+        print(f"DEBUG: Received form data: lab_id={lab_id}, title={title}, experiment_date={experiment_date}, description={description}")
+        
+        # Validate required fields with specific error messages
+        if not lab_id:
+            return jsonify({'error': 'Missing required field: lab_id'}), 400
+        if not title:
+            return jsonify({'error': 'Missing required field: title'}), 400
+        if not experiment_date:
+            return jsonify({'error': 'Missing required field: experiment_date'}), 400
         
         # Verify teacher owns this lab
         lab = Lab.get_by_id(lab_id)
