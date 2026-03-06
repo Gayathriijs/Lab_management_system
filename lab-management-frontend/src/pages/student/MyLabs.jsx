@@ -343,10 +343,13 @@ const MyLabs = () => {
   }, []);
 
   // ── Load tab data when lab/tab changes
+  // loadAttendance is always called (not just on attendance tab) so that
+  // todayAttendance state (check-in/out button) is always in sync on every
+  // page load, refresh, or lab switch.
   useEffect(() => {
     if (!selectedLab) return;
+    loadAttendance(); // always keep today's check-in status up-to-date
     if (activeTab === 'experiments') loadExperiments();
-    if (activeTab === 'attendance')  loadAttendance();
     if (activeTab === 'syllabus')    loadSyllabus();
     if (activeTab === 'quizzes')     loadQuizzes();
   }, [selectedLab, activeTab]);
@@ -368,12 +371,19 @@ const MyLabs = () => {
     try {
       const d = await studentAPI.getMyAttendance(selectedLab);
       setAttendance(d);
-      // Detect if already checked in today (no check_out_time)
+      // Detect today's check-in/out state:
+      // - null       → no check-in yet      → show Check In button
+      // - checkedOut:false → checked in, no checkout → show Check Out button
+      // - checkedOut:true  → fully checked out       → show "Attendance recorded"
       const today = new Date().toISOString().slice(0, 10);
       const todayRecord = d.records?.find(
-        (r) => r.check_in_time?.startsWith(today) && !r.check_out_time
+        (r) => r.check_in_time?.startsWith(today)
       );
-      setTodayAttendance(todayRecord ? { id: todayRecord.id, checkedOut: false } : null);
+      if (todayRecord) {
+        setTodayAttendance({ id: todayRecord.id, checkedOut: !!todayRecord.check_out_time });
+      } else {
+        setTodayAttendance(null);
+      }
     } catch {
       toast.error('Failed to load attendance');
     } finally {
