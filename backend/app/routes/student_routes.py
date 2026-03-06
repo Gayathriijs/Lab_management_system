@@ -617,7 +617,8 @@ def get_available_quizzes(current_user, lab_id):
                 e.title as experiment_title,
                 q.duration_minutes,
                 q.total_marks,
-                qa.id IS NOT NULL as attempted
+                qa.id IS NOT NULL as attempted,
+                qa.id as attempt_id
             FROM quizzes q
             INNER JOIN experiments e ON q.experiment_id = e.id
             LEFT JOIN quiz_attempts qa ON q.id = qa.quiz_id AND qa.student_id = %s
@@ -723,6 +724,67 @@ def start_quiz(current_user, quiz_id):
         return jsonify({'error': str(e)}), 500
 
 
+@student_bp.route('/quiz/retake/<int:quiz_id>', methods=['POST'])
+@token_required
+@role_required(['student'])
+def retake_quiz(current_user, quiz_id):
+    """
+    Delete the existing attempt and start a fresh quiz attempt.
+    """
+    try:
+        # Delete existing attempt (quiz_answers cascade-deleted automatically)
+        delete_query = """
+            DELETE FROM quiz_attempts
+            WHERE quiz_id = %s AND student_id = %s
+        """
+        Database.execute_query(
+            delete_query,
+            (quiz_id, current_user['id']),
+            commit=True
+        )
+
+        # Get quiz info
+        quiz_query = """
+            SELECT title, duration_minutes, total_marks
+            FROM quizzes
+            WHERE id = %s AND is_active = TRUE
+        """
+        quiz = Database.execute_query(quiz_query, (quiz_id,), fetch_one=True)
+
+        if not quiz:
+            return jsonify({'error': 'Quiz not found or not active'}), 404
+
+        # Create new attempt
+        attempt_query = """
+            INSERT INTO quiz_attempts (quiz_id, student_id, total_marks)
+            VALUES (%s, %s, %s)
+        """
+        attempt_id = Database.execute_query(
+            attempt_query,
+            (quiz_id, current_user['id'], quiz['total_marks']),
+            commit=True
+        )
+
+        # Get questions (without correct answers)
+        questions_query = """
+            SELECT id, question_text, option_a, option_b, option_c, option_d, marks
+            FROM quiz_questions
+            WHERE quiz_id = %s
+        """
+        questions = Database.execute_query(questions_query, (quiz_id,), fetch_all=True)
+
+        return jsonify({
+            'attempt_id': attempt_id,
+            'quiz_title': quiz['title'],
+            'duration_minutes': quiz['duration_minutes'],
+            'total_marks': quiz['total_marks'],
+            'questions': questions
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @student_bp.route('/quiz/submit/<int:attempt_id>', methods=['POST'])
 @token_required
 @role_required(['student'])
@@ -798,7 +860,7 @@ def submit_quiz(current_user, attempt_id):
                 continue
             
             correct_answer = correct_dict[question_id]['correct_answer']
-            marks = correct_dict[question_id]['marks']
+            marks = float(correct_dict[question_id]['marks'])
             is_correct = (selected == correct_answer)
             
             if is_correct:
@@ -829,7 +891,7 @@ def submit_quiz(current_user, attempt_id):
         )
         
         # Get total marks
-        total_marks = sum(q['marks'] for q in correct_answers)
+        total_marks = sum(float(q['marks']) for q in correct_answers)
         percentage = calculate_percentage(total_score, total_marks)
         
         return jsonify({
@@ -898,13 +960,16 @@ def get_quiz_result(current_user, attempt_id):
         # Format data
         for answer in answers:
             answer['is_correct'] = bool(answer['is_correct'])
+            answer['marks'] = float(answer['marks'])
         
-        percentage = calculate_percentage(attempt['score'], attempt['total_marks'])
+        score = float(attempt['score']) if attempt['score'] is not None else 0.0
+        total_marks = float(attempt['total_marks']) if attempt['total_marks'] is not None else 0.0
+        percentage = calculate_percentage(score, total_marks)
         
         return jsonify({
             'quiz_title': attempt['quiz_title'],
-            'score': attempt['score'],
-            'total_marks': attempt['total_marks'],
+            'score': score,
+            'total_marks': total_marks,
             'percentage': percentage,
             'submitted_at': format_datetime(attempt['submitted_at']),
             'answers': answers

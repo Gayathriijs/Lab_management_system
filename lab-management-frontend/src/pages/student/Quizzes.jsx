@@ -51,10 +51,11 @@ const Timer = ({ durationMinutes, onExpire }) => {
 // ────────────────────────────────────────────────────────────
 // Result Modal
 // ────────────────────────────────────────────────────────────
-const ResultModal = ({ attemptId, onClose }) => {
+const ResultModal = ({ attemptId, onClose, onRetake }) => {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [retaking, setRetaking] = useState(false);
 
   useEffect(() => {
     studentAPI
@@ -112,6 +113,9 @@ const ResultModal = ({ attemptId, onClose }) => {
 
               {showAnswers && (
                 <div className="mt-3 space-y-4">
+                  {!result.answers?.length && (
+                    <p className="text-sm text-gray-400 text-center py-4">No answer details available for this attempt.</p>
+                  )}
                   {result.answers?.map((ans, i) => (
                     <div key={i} className={`rounded-xl border p-4 ${ans.is_correct ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
                       <div className="flex items-start gap-2">
@@ -150,12 +154,30 @@ const ResultModal = ({ attemptId, onClose }) => {
               )}
             </div>
 
-            <button
-              onClick={onClose}
-              className="w-full py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700"
-            >
-              Close
-            </button>
+            <div className="flex gap-3">
+              {onRetake && (
+                <button
+                  onClick={async () => {
+                    setRetaking(true);
+                    try {
+                      await onRetake();
+                    } finally {
+                      setRetaking(false);
+                    }
+                  }}
+                  disabled={retaking}
+                  className="flex-1 py-3 border border-primary-600 text-primary-700 font-semibold rounded-xl hover:bg-primary-50 disabled:opacity-60"
+                >
+                  {retaking ? 'Starting...' : '🔁 Retake Quiz'}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700"
+              >
+                Close
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
@@ -404,31 +426,39 @@ const Quizzes = () => {
   };
 
   // ── View result for already-attempted quiz
-  // We need to fetch attempts to get attempt_id. For now we look it up via start
-  // The backend returns 400 "already attempted" — handle gracefully
-  const handleViewResult = async (quiz) => {
-    // We don't have attempt_id in the list response.
-    // Try calling start to get the "already attempted" error which
-    // doesn't give us the id. Instead, open result modal with quiz_id
-    // by fetching the list with attempt info via performance or storing it.
-    // Workaround: we stored attempt_id after submit — check quizResult map.
-    if (quizResultMap[quiz.quiz_id]) {
-      setResultAttemptId(quizResultMap[quiz.quiz_id]);
+  const handleViewResult = (quiz) => {
+    if (quiz.attempt_id) {
+      setRetakeQuizId(quiz.quiz_id);
+      setResultAttemptId(quiz.attempt_id);
     } else {
-      toast('To view past results, attempt IDs are needed. Use the performance page for full history.');
+      toast.error('Result not available yet.');
     }
   };
 
-  // Store attempt_id after submission
-  const [quizResultMap, setQuizResultMap] = useState({}); // { quiz_id: attempt_id }
-
   const handleSubmitted = (attemptId) => {
-    // refresh list
     setActiveSession(null);
     if (selectedLab) {
       studentAPI.getAvailableQuizzes(selectedLab).then((d) => setQuizzes(d.quizzes));
     }
     setResultAttemptId(attemptId);
+  };
+
+  // ── Retake quiz (called from ResultModal)
+  const [retakeQuizId, setRetakeQuizId] = useState(null);
+
+  const handleRetake = async () => {
+    if (!retakeQuizId) return;
+    try {
+      const session = await studentAPI.retakeQuiz(retakeQuizId);
+      setResultAttemptId(null);
+      setRetakeQuizId(null);
+      setActiveSession(session);
+      if (selectedLab) {
+        studentAPI.getAvailableQuizzes(selectedLab).then((d) => setQuizzes(d.quizzes));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to retake quiz');
+    }
   };
 
   // ── If quiz is active, show the full-screen quiz view
@@ -568,7 +598,8 @@ const Quizzes = () => {
       {resultAttemptId && (
         <ResultModal
           attemptId={resultAttemptId}
-          onClose={() => setResultAttemptId(null)}
+          onClose={() => { setResultAttemptId(null); setRetakeQuizId(null); }}
+          onRetake={retakeQuizId ? handleRetake : undefined}
         />
       )}
     </div>

@@ -66,6 +66,11 @@ export const studentAPI = {
     return response.data;
   },
 
+  retakeQuiz: async (quizId) => {
+    const response = await axios.post(`/student/quiz/retake/${quizId}`);
+    return response.data;
+  },
+
   submitQuiz: async (attemptId, answers) => {
     const response = await axios.post(`/student/quiz/submit/${attemptId}`, { answers });
     return response.data;
