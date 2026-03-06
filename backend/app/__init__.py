@@ -3,7 +3,8 @@ Flask application factory.
 Initializes the Flask app, registers blueprints, and configures CORS.
 """
 
-from flask import Flask, jsonify
+import os
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from app.config import config, Config
 
@@ -77,5 +78,10 @@ def create_app(config_name='development'):
     @app.errorhandler(403)
     def forbidden(error):
         return jsonify({'error': 'Access forbidden'}), 403
-    
+
+    # Serve uploaded files (syllabus, experiments, records, outputs)
+    @app.route('/uploads/<path:filename>')
+    def serve_upload(filename):
+        return send_from_directory(Config.UPLOAD_FOLDER, filename)
+
     return app

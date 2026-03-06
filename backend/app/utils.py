@@ -30,7 +30,7 @@ def save_file(file, folder):
         folder (str): Destination folder path
         
     Returns:
-        str: Saved file path or None if failed
+        str: Relative URL path like /uploads/experiments/file.pdf, or None if failed
     """
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
@@ -44,9 +44,36 @@ def save_file(file, folder):
         filepath = os.path.join(folder, filename)
         file.save(filepath)
         
-        return filepath
+        # Return a relative URL path so the frontend can use it directly
+        relative = os.path.relpath(filepath, Config.UPLOAD_FOLDER)
+        return '/uploads/' + relative.replace(os.sep, '/')
     
     return None
+
+
+def normalize_file_path(file_path):
+    """
+    Normalise a stored file_path to a relative URL.
+    Handles both old absolute paths and new relative /uploads/... paths.
+    
+    Args:
+        file_path (str): Value from database
+        
+    Returns:
+        str: Relative URL like /uploads/experiments/file.pdf
+    """
+    if not file_path:
+        return None
+    # Already a relative URL
+    if file_path.startswith('/uploads/'):
+        return file_path
+    # Absolute path — extract everything from the 'uploads' folder onward
+    normalised = file_path.replace('\\', '/')
+    idx = normalised.find('/uploads/')
+    if idx != -1:
+        return normalised[idx:]
+    # Fallback: just return as-is
+    return file_path
 
 
 def delete_file(filepath):

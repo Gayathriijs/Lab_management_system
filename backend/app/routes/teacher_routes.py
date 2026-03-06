@@ -6,7 +6,7 @@ and student performance evaluation.
 from flask import Blueprint, request, jsonify
 from app.auth import token_required, role_required
 from app.models import Database, Lab, Experiment
-from app.utils import save_file, validate_required_fields, format_datetime, calculate_percentage
+from app.utils import save_file, validate_required_fields, format_datetime, calculate_percentage, normalize_file_path
 from app.config import Config
 from datetime import datetime
 
@@ -232,9 +232,10 @@ def get_syllabus(current_user, lab_id):
         """
         syllabus_list = Database.execute_query(query, (lab_id,), fetch_all=True)
         
-        # Format datetime
+        # Format datetime and normalize file paths
         for item in syllabus_list:
             item['uploaded_at'] = format_datetime(item['uploaded_at'])
+            item['file_path'] = normalize_file_path(item['file_path'])
         
         return jsonify({'syllabus': syllabus_list}), 200
         
@@ -336,10 +337,11 @@ def get_experiments(current_user, lab_id):
     try:
         experiments = Experiment.get_by_lab(lab_id)
         
-        # Format datetime
+        # Format datetime and normalize file paths
         for exp in experiments:
             exp['created_at'] = format_datetime(exp['created_at'])
             exp['experiment_date'] = str(exp['experiment_date'])
+            exp['file_path'] = normalize_file_path(exp.get('file_path'))
         
         return jsonify({'experiments': experiments}), 200
         
@@ -717,9 +719,10 @@ def get_pending_submissions(current_user, lab_id):
         """
         submissions = Database.execute_query(query, (lab_id,), fetch_all=True)
         
-        # Format datetime
+        # Format datetime and normalize file paths
         for sub in submissions:
             sub['submitted_at'] = format_datetime(sub['submitted_at'])
+            sub['file_path'] = normalize_file_path(sub['file_path'])
         
         return jsonify({'pending_submissions': submissions}), 200
         
@@ -858,9 +861,10 @@ def get_pending_outputs(current_user, lab_id):
         """
         outputs = Database.execute_query(query, (lab_id,), fetch_all=True)
         
-        # Format datetime
+        # Format datetime and normalize file paths
         for output in outputs:
             output['submitted_at'] = format_datetime(output['submitted_at'])
+            output['file_path'] = normalize_file_path(output['file_path'])
         
         return jsonify({'pending_outputs': outputs}), 200
         

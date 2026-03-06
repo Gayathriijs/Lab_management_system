@@ -6,7 +6,7 @@ submissions, quizzes, and performance tracking.
 from flask import Blueprint, request, jsonify
 from app.auth import token_required, role_required
 from app.models import Database, Lab, Experiment
-from app.utils import save_file, validate_required_fields, format_datetime, calculate_percentage
+from app.utils import save_file, validate_required_fields, format_datetime, calculate_percentage, normalize_file_path
 from app.config import Config
 from datetime import datetime
 
@@ -102,9 +102,10 @@ def get_syllabus(current_user, lab_id):
         """
         syllabus_list = Database.execute_query(query, (lab_id,), fetch_all=True)
         
-        # Format datetime
+        # Format datetime and normalize file paths
         for item in syllabus_list:
             item['uploaded_at'] = format_datetime(item['uploaded_at'])
+            item['file_path'] = normalize_file_path(item['file_path'])
         
         return jsonify({'syllabus': syllabus_list}), 200
         
@@ -185,6 +186,7 @@ def get_experiments(current_user, lab_id):
             exp['record_submitted'] = bool(exp['record_submitted'])
             exp['output_submitted'] = bool(exp['output_submitted'])
             exp['quiz_attempted'] = bool(exp['quiz_attempted'])
+            exp['file_path'] = normalize_file_path(exp['file_path'])
         
         return jsonify({'experiments': experiments}), 200
         
@@ -242,6 +244,7 @@ def get_experiment_details(current_user, experiment_id):
         # Format data
         experiment['experiment_date'] = str(experiment['experiment_date'])
         experiment['created_at'] = format_datetime(experiment['created_at'])
+        experiment['file_path'] = normalize_file_path(experiment.get('file_path'))
         
         if submission:
             submission['submitted_at'] = format_datetime(submission['submitted_at'])
