@@ -109,4 +109,20 @@ export const teacherAPI = {
     const response = await axios.get(`/teacher/quiz/results/${quizId}`);
     return response.data;
   },
+
+  // Enrollment management
+  getLabStudents: async (labId) => {
+    const response = await axios.get(`/teacher/labs/${labId}/students`);
+    return response.data;
+  },
+
+  enrollStudent: async (labId, studentId) => {
+    const response = await axios.post(`/teacher/labs/${labId}/enroll`, { student_id: studentId });
+    return response.data;
+  },
+
+  unenrollStudent: async (labId, studentId) => {
+    const response = await axios.delete(`/teacher/labs/${labId}/unenroll/${studentId}`);
+    return response.data;
+  },
 };

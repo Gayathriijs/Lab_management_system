@@ -11,6 +11,11 @@ import {
   AlertCircle,
   FileText,
   Award,
+  UserPlus,
+  UserMinus,
+  ChevronDown,
+  ChevronUp,
+  Search,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -48,12 +53,38 @@ const TeacherDashboard = () => {
     pendingSubmissions: 0,
     averageAttendance: 0,
   });
-  const [selectedLab, setSelectedLab] = useState(1);
+  const [labs, setLabs] = useState([]);
+  const [selectedLab, setSelectedLab] = useState(null);
   const [classPerformance, setClassPerformance] = useState(null);
 
+  // Enrollment panel state
+  const [showEnrollment, setShowEnrollment] = useState(false);
+  const [enrolledStudents, setEnrolledStudents] = useState([]);
+  const [unenrolledStudents, setUnenrolledStudents] = useState([]);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false);
+  const [enrollSearch, setEnrollSearch] = useState('');
+  const [unenrollSearch, setUnenrollSearch] = useState('');
+
   useEffect(() => {
-    loadDashboardData();
+    loadLabs();
+  }, []);
+
+  useEffect(() => {
+    if (selectedLab) {
+      loadDashboardData();
+      if (showEnrollment) loadEnrollmentData();
+    }
   }, [selectedLab]);
+
+  const loadLabs = async () => {
+    try {
+      const data = await teacherAPI.getManagedLabs();
+      setLabs(data.labs);
+      if (data.labs.length > 0) setSelectedLab(data.labs[0].id);
+    } catch (error) {
+      console.error('Error loading labs:', error);
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -78,6 +109,45 @@ const TeacherDashboard = () => {
     }
   };
 
+  const loadEnrollmentData = async () => {
+    try {
+      setEnrollmentLoading(true);
+      const data = await teacherAPI.getLabStudents(selectedLab);
+      setEnrolledStudents(data.enrolled);
+      setUnenrolledStudents(data.unenrolled);
+    } catch (error) {
+      console.error('Error loading enrollment data:', error);
+    } finally {
+      setEnrollmentLoading(false);
+    }
+  };
+
+  const handleToggleEnrollment = () => {
+    const next = !showEnrollment;
+    setShowEnrollment(next);
+    if (next) loadEnrollmentData();
+  };
+
+  const handleEnroll = async (studentId) => {
+    try {
+      await teacherAPI.enrollStudent(selectedLab, studentId);
+      await loadEnrollmentData();
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Enroll error:', error);
+    }
+  };
+
+  const handleUnenroll = async (studentId) => {
+    try {
+      await teacherAPI.unenrollStudent(selectedLab, studentId);
+      await loadEnrollmentData();
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Unenroll error:', error);
+    }
+  };
+
   if (loading) {
     return <Loading fullScreen message="Loading dashboard..." />;
   }
@@ -98,13 +168,15 @@ const TeacherDashboard = () => {
             </div>
             <div className="flex items-center space-x-3">
               <select
-                value={selectedLab}
+                value={selectedLab || ''}
                 onChange={(e) => setSelectedLab(Number(e.target.value))}
                 className="input-field"
               >
-                <option value={1}>Data Structures Lab</option>
-                <option value={2}>Algorithm Lab</option>
-                <option value={3}>Database Lab</option>
+                {labs.map((lab) => (
+                  <option key={lab.id} value={lab.id}>
+                    {lab.name} ({lab.student_count} students)
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -226,7 +298,142 @@ const TeacherDashboard = () => {
           </div>
         )}
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* ===== ENROLLMENT MANAGEMENT PANEL ===== */}
+        <div className="mt-8 card">
+          <button
+            onClick={handleToggleEnrollment}
+            className="w-full flex items-center justify-between"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="text-left">
+                <h2 className="text-lg font-bold text-gray-900">Manage Student Enrollment</h2>
+                <p className="text-sm text-gray-500">
+                  {enrolledStudents.length > 0 || showEnrollment
+                    ? `${enrolledStudents.length} enrolled · ${unenrolledStudents.length} available`
+                    : 'Click to enroll or remove students'}
+                </p>
+              </div>
+            </div>
+            {showEnrollment ? (
+              <ChevronUp className="w-5 h-5 text-gray-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-400" />
+            )}
+          </button>
+
+          {showEnrollment && (
+            <div className="mt-6">
+              {enrollmentLoading ? (
+                <div className="text-center py-8 text-gray-500">Loading students...</div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* Enrolled Students */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-800 flex items-center space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>Enrolled ({enrolledStudents.length})</span>
+                      </h3>
+                    </div>
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search enrolled..."
+                        value={unenrollSearch}
+                        onChange={(e) => setUnenrollSearch(e.target.value)}
+                        className="input-field pl-9 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {enrolledStudents
+                        .filter((s) =>
+                          s.name.toLowerCase().includes(unenrollSearch.toLowerCase()) ||
+                          s.college_id.toLowerCase().includes(unenrollSearch.toLowerCase())
+                        )
+                        .map((student) => (
+                          <div
+                            key={student.id}
+                            className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{student.name}</p>
+                              <p className="text-xs text-gray-500">{student.college_id}</p>
+                            </div>
+                            <button
+                              onClick={() => handleUnenroll(student.id)}
+                              className="flex items-center space-x-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium transition-colors"
+                            >
+                              <UserMinus className="w-3.5 h-3.5" />
+                              <span>Remove</span>
+                            </button>
+                          </div>
+                        ))}
+                      {enrolledStudents.length === 0 && (
+                        <p className="text-center text-gray-400 py-6 text-sm">No students enrolled yet</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Unenrolled Students */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-800 flex items-center space-x-2">
+                        <UserPlus className="w-4 h-4 text-blue-500" />
+                        <span>Available to Enroll ({unenrolledStudents.length})</span>
+                      </h3>
+                    </div>
+                    <div className="relative mb-3">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search students..."
+                        value={enrollSearch}
+                        onChange={(e) => setEnrollSearch(e.target.value)}
+                        className="input-field pl-9 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {unenrolledStudents
+                        .filter((s) =>
+                          s.name.toLowerCase().includes(enrollSearch.toLowerCase()) ||
+                          s.college_id.toLowerCase().includes(enrollSearch.toLowerCase())
+                        )
+                        .map((student) => (
+                          <div
+                            key={student.id}
+                            className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{student.name}</p>
+                              <p className="text-xs text-gray-500">{student.college_id}</p>
+                            </div>
+                            <button
+                              onClick={() => handleEnroll(student.id)}
+                              className="flex items-center space-x-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-medium transition-colors"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>Enroll</span>
+                            </button>
+                          </div>
+                        ))}
+                      {unenrolledStudents.length === 0 && (
+                        <p className="text-center text-gray-400 py-6 text-sm">All students are enrolled</p>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <button className="card hover:shadow-md transition-shadow duration-200 text-left group">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-primary-100 rounded-lg group-hover:bg-primary-200 transition-colors">

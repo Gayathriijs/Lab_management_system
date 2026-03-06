@@ -57,6 +57,87 @@ def get_managed_labs(current_user):
         return jsonify({'error': str(e)}), 500
 
 
+@teacher_bp.route('/labs/<int:lab_id>/students', methods=['GET'])
+@token_required
+@role_required(['teacher'])
+def get_lab_students(current_user, lab_id):
+    """Get enrolled and unenrolled students for a lab."""
+    try:
+        lab = Lab.get_by_id(lab_id)
+        if not lab or lab['teacher_id'] != current_user['id']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        enrolled_query = """
+            SELECT u.id, u.name, u.college_id, u.email, le.enrolled_at
+            FROM lab_enrollments le
+            JOIN users u ON le.student_id = u.id
+            WHERE le.lab_id = %s
+            ORDER BY u.name
+        """
+        enrolled = Database.execute_query(enrolled_query, (lab_id,), fetch_all=True)
+        for s in enrolled:
+            s['enrolled_at'] = format_datetime(s['enrolled_at'])
+
+        unenrolled_query = """
+            SELECT u.id, u.name, u.college_id, u.email
+            FROM users u
+            WHERE u.role = 'student'
+            AND u.id NOT IN (
+                SELECT student_id FROM lab_enrollments WHERE lab_id = %s
+            )
+            ORDER BY u.name
+        """
+        unenrolled = Database.execute_query(unenrolled_query, (lab_id,), fetch_all=True)
+
+        return jsonify({'enrolled': enrolled, 'unenrolled': unenrolled}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@teacher_bp.route('/labs/<int:lab_id>/enroll', methods=['POST'])
+@token_required
+@role_required(['teacher'])
+def enroll_student(current_user, lab_id):
+    """Enroll a student into the lab."""
+    try:
+        lab = Lab.get_by_id(lab_id)
+        if not lab or lab['teacher_id'] != current_user['id']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        data = request.get_json()
+        student_id = data.get('student_id')
+        if not student_id:
+            return jsonify({'error': 'student_id is required'}), 400
+
+        query = "INSERT INTO lab_enrollments (lab_id, student_id) VALUES (%s, %s)"
+        Database.execute_query(query, (lab_id, student_id), commit=True)
+        return jsonify({'message': 'Student enrolled successfully'}), 201
+
+    except Exception as e:
+        if 'Duplicate' in str(e):
+            return jsonify({'error': 'Student is already enrolled'}), 409
+        return jsonify({'error': str(e)}), 500
+
+
+@teacher_bp.route('/labs/<int:lab_id>/unenroll/<int:student_id>', methods=['DELETE'])
+@token_required
+@role_required(['teacher'])
+def unenroll_student(current_user, lab_id, student_id):
+    """Remove a student from the lab."""
+    try:
+        lab = Lab.get_by_id(lab_id)
+        if not lab or lab['teacher_id'] != current_user['id']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        query = "DELETE FROM lab_enrollments WHERE lab_id = %s AND student_id = %s"
+        Database.execute_query(query, (lab_id, student_id), commit=True)
+        return jsonify({'message': 'Student unenrolled successfully'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== SYLLABUS MANAGEMENT ====================
 
 @teacher_bp.route('/syllabus/upload', methods=['POST'])
