@@ -11,6 +11,7 @@ import {
   Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { exportToCSV } from '../../utils/exportHelper';
 
 const Attendance = () => {
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,49 @@ const Attendance = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExport = () => {
+    if (viewMode === 'daily') {
+      if (!dailyData || !dailyData.attendance_list || dailyData.attendance_list.length === 0) {
+        toast.error('No daily attendance data to export');
+        return;
+      }
+
+      const exportRows = dailyData.attendance_list.map((record) => ({
+        student_name: record.student_name,
+        college_id: record.college_id,
+        check_in_time: record.check_in_time,
+        check_out_time: record.check_out_time || '-',
+        status: record.status || 'Present',
+      }));
+
+      exportToCSV(exportRows, `attendance_daily_${selectedDate}.csv`);
+      toast.success('Daily attendance exported');
+      return;
+    }
+
+    if (!monthlyData || !monthlyData.summary || monthlyData.summary.length === 0) {
+      toast.error('No monthly attendance data to export');
+      return;
+    }
+
+    const exportRows = monthlyData.summary.map((day) => {
+      const attendanceRate = monthlyData.total_students
+        ? ((day.present / monthlyData.total_students) * 100).toFixed(2)
+        : '0.00';
+
+      return {
+        date: day.date,
+        present: day.present,
+        absent: day.absent,
+        total_students: monthlyData.total_students,
+        attendance_rate_percent: attendanceRate,
+      };
+    });
+
+    exportToCSV(exportRows, `attendance_monthly_${selectedMonth}.csv`);
+    toast.success('Monthly attendance exported');
   };
 
   if (loading) {
@@ -124,7 +168,10 @@ const Attendance = () => {
               />
             )}
 
-            <button className="btn-secondary flex items-center space-x-2">
+            <button
+              onClick={handleExport}
+              className="btn-secondary flex items-center space-x-2"
+            >
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
