@@ -20,7 +20,6 @@ A full-stack web application for managing college laboratory sessions at **Toc H
 - [Default Credentials](#default-credentials)
 
 ---
-
 ## Recent Updates
 
 - Attendance page export now supports CSV export for both daily and monthly views
@@ -348,117 +347,30 @@ This extension is optional and can be added without changing application code pa
 
 If you want a reusable SQL layer for experiment-level analytics, you can add an Experiment Progress view.
 
-Run this SQL in MySQL (update `labsync_db` to your actual database name if you used a different one during setup):
+### Where this view is used
 
-```sql
-USE labsync_db;
+- Primary use case: Teacher-side experiment analytics and dashboard summaries
+- Best backend integration points:
+    - `backend/app/routes/teacher_routes.py` for API endpoints that return experiment progress to UI
+    - `backend/app/services/performance_service.py` for aggregated reporting logic
+- Suggested frontend consumers:
+    - Teacher Dashboard cards/widgets
+    - Experiments page progress indicators
+    - Export/report endpoints for monthly academic reports
 
-DROP VIEW IF EXISTS v_experiment_progress;
+### How this view is used
 
-CREATE VIEW v_experiment_progress AS
-SELECT
-    e.id AS experiment_id,
-    e.lab_id,
-    l.name AS lab_name,
-    e.title AS experiment_title,
-    e.experiment_date,
-    e.created_by,
+1. Create the view once in MySQL using the definitions in `backend/schema.sql`.
+2. Query it like a normal table from backend SQL queries.
+3. Filter by `lab_id`, date, or experiment to serve targeted API responses.
+4. Use returned pre-aggregated columns (`total_submissions`, `avg_quiz_score`, `submission_coverage_pct`, etc.) directly in UI cards/charts.
 
-    COALESCE(le.total_enrolled, 0) AS total_enrolled_students,
-    COALESCE(s.total_submissions, 0) AS total_submissions,
-    COALESCE(s.students_submitted, 0) AS students_submitted,
-    COALESCE(s.pending_submissions, 0) AS pending_submissions,
-    COALESCE(s.accepted_submissions, 0) AS accepted_submissions,
-    COALESCE(s.rejected_submissions, 0) AS rejected_submissions,
-    COALESCE(s.evaluated_submissions, 0) AS evaluated_submissions,
+This reduces repeated JOIN + GROUP BY queries in routes and keeps response logic simpler and faster.
 
-    COALESCE(ov.total_outputs, 0) AS total_outputs,
-    COALESCE(ov.verified_outputs, 0) AS verified_outputs,
+Implementation note:
 
-    COALESCE(q.total_quizzes, 0) AS total_quizzes,
-    COALESCE(q.active_quizzes, 0) AS active_quizzes,
-    COALESCE(qa.total_attempts, 0) AS total_quiz_attempts,
-    COALESCE(qa.avg_quiz_score, 0.00) AS avg_quiz_score,
-
-    CASE
-        WHEN COALESCE(le.total_enrolled, 0) = 0 THEN 0.00
-        ELSE ROUND((COALESCE(s.students_submitted, 0) * 100.0) / COALESCE(le.total_enrolled, 1), 2)
-    END AS submission_coverage_pct,
-
-    DATEDIFF(CURDATE(), e.experiment_date) AS days_since_experiment
-FROM experiments e
-JOIN labs l ON l.id = e.lab_id
-
-LEFT JOIN (
-    SELECT
-        lab_id,
-        COUNT(*) AS total_enrolled
-    FROM lab_enrollments
-    GROUP BY lab_id
-) le ON le.lab_id = e.lab_id
-
-LEFT JOIN (
-    SELECT
-        experiment_id,
-        COUNT(*) AS total_submissions,
-        COUNT(DISTINCT student_id) AS students_submitted,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_submissions,
-        SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted_submissions,
-        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected_submissions,
-        SUM(CASE WHEN status IN ('accepted', 'rejected') THEN 1 ELSE 0 END) AS evaluated_submissions
-    FROM submissions
-    GROUP BY experiment_id
-) s ON s.experiment_id = e.id
-
-LEFT JOIN (
-    SELECT
-        experiment_id,
-        COUNT(*) AS total_outputs,
-        SUM(CASE WHEN verified = 1 THEN 1 ELSE 0 END) AS verified_outputs
-    FROM output_verifications
-    GROUP BY experiment_id
-) ov ON ov.experiment_id = e.id
-
-LEFT JOIN (
-    SELECT
-        experiment_id,
-        COUNT(*) AS total_quizzes,
-        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_quizzes
-    FROM quizzes
-    GROUP BY experiment_id
-) q ON q.experiment_id = e.id
-
-LEFT JOIN (
-    SELECT
-        q.experiment_id,
-        COUNT(qa.id) AS total_attempts,
-        ROUND(AVG(qa.score), 2) AS avg_quiz_score
-    FROM quizzes q
-    LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id
-    GROUP BY q.experiment_id
-) qa ON qa.experiment_id = e.id;
-```
-
-Quick verification queries:
-
-```sql
-SELECT * FROM v_experiment_progress LIMIT 20;
-```
-
-```sql
-SELECT
-    experiment_id,
-    experiment_title,
-    total_enrolled_students,
-    students_submitted,
-    submission_coverage_pct,
-    pending_submissions,
-    accepted_submissions,
-    rejected_submissions
-FROM v_experiment_progress
-WHERE lab_id = 1
-ORDER BY experiment_date DESC;
-```
+- View creation SQL is maintained in `backend/schema.sql` so setup and deployment stay centralized.
+- Keep README focused on usage and architecture, while executable SQL lives in schema/migration files.
 
 ---
 
