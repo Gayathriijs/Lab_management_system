@@ -6,6 +6,7 @@ A full-stack web application for managing college laboratory sessions at **Toc H
 
 ## Table of Contents
 
+- [Recent Updates](#recent-updates)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
@@ -18,13 +19,25 @@ A full-stack web application for managing college laboratory sessions at **Toc H
 
 ---
 
+## Recent Updates
+
+- Attendance page export now supports CSV export for both daily and monthly views
+- Teachers can now delete experiments from the UI with a confirmation dialog
+- Experiment deletion is creator-protected in backend authorization logic
+- New teacher API endpoint available for deleting experiments: `DELETE /api/teacher/experiment/:id`
+- Optional database enhancement documented: low-attendance alert trigger flow (`attendance_alerts` + attendance triggers)
+
+---
+
 ## Features
 
 ### Teacher
 - View and manage labs with live student enrollment panel (enroll / remove students)
 - Upload syllabus PDFs per lab
 - Create experiments with optional documentation files
+- Delete experiments created by the logged-in teacher (with confirmation)
 - Track daily and monthly attendance
+- Export attendance reports as CSV (daily and monthly)
 - Evaluate student record submissions (accept / reject with marks & remarks)
 - Verify output uploads from students
 - Conduct viva evaluations and record scores
@@ -258,6 +271,7 @@ All endpoints are prefixed with `/api`.
 | POST | `/syllabus/upload` | Upload syllabus PDF |
 | GET | `/syllabus/:labId` | Get syllabus list for a lab |
 | POST | `/experiment/create` | Create a new experiment |
+| DELETE | `/experiment/:id` | Delete an experiment (creator-only) |
 | GET | `/experiments/:labId` | List experiments in a lab |
 | GET | `/attendance/daily/:labId` | Daily attendance for a lab |
 | GET | `/attendance/monthly/:labId` | Monthly attendance summary |
@@ -307,9 +321,24 @@ After running `seed_data.py`:
 - Passwords are hashed using **bcrypt** (never stored in plain text)
 - All protected routes use **JWT Bearer token** authentication
 - Teachers can only access data for labs they own (ownership check on every route)
+- Only the teacher who created an experiment can delete it
 - File uploads are restricted to PDF, PNG, JPG, DOC/DOCX and limited to **16 MB**
 - CORS is configured to `"origins": "*"` for development — **restrict to your domain in production**
 - Secret keys must be changed via `.env` before any deployment
+
+---
+
+## Trigger Extension (Optional)
+
+If you want real-time DB-side attendance risk tracking, you can add a MySQL trigger extension:
+
+- Create `attendance_alerts` table to track per-student per-lab attendance risk
+- Add attendance `AFTER INSERT`, `AFTER UPDATE`, and `AFTER DELETE` triggers
+- Recompute attendance percentage on each attendance write
+- Mark alert `active` when attendance falls below threshold (for example 75%)
+- Mark alert `resolved` when attendance returns to threshold or above
+
+This extension is optional and can be added without changing application code paths.
 
 ---
 

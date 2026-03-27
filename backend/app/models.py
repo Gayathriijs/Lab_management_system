@@ -194,6 +194,12 @@ class Experiment:
         query = "SELECT * FROM experiments WHERE id = %s"
         return Database.execute_query(query, (experiment_id,), fetch_one=True)
 
+    @staticmethod
+    def delete(experiment_id):
+        """Delete experiment by ID"""
+        query = "DELETE FROM experiments WHERE id = %s"
+        return Database.execute_query(query, (experiment_id,), commit=True)
+
 
 class Attendance:
     """Attendance model for database operations"""

@@ -6,9 +6,10 @@ and student performance evaluation.
 from flask import Blueprint, request, jsonify
 from app.auth import token_required, role_required
 from app.models import Database, Lab, Experiment
-from app.utils import save_file, validate_required_fields, format_datetime, calculate_percentage, normalize_file_path
+from app.utils import save_file, validate_required_fields, format_datetime, calculate_percentage, normalize_file_path, delete_file
 from app.config import Config
 from datetime import datetime
+import os
 
 teacher_bp = Blueprint('teacher', __name__, url_prefix='/api/teacher')
 
@@ -345,6 +346,33 @@ def get_experiments(current_user, lab_id):
         
         return jsonify({'experiments': experiments}), 200
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@teacher_bp.route('/experiment/<int:experiment_id>', methods=['DELETE'])
+@token_required
+@role_required(['teacher'])
+def delete_experiment(current_user, experiment_id):
+    """Delete an experiment. Only the teacher who created it can delete it."""
+    try:
+        experiment = Experiment.get_by_id(experiment_id)
+        if not experiment:
+            return jsonify({'error': 'Experiment not found'}), 404
+
+        if experiment['created_by'] != current_user['id']:
+            return jsonify({'error': 'Unauthorized: Only the creator can delete this experiment'}), 403
+
+        # Best-effort cleanup for uploaded documentation.
+        relative_path = normalize_file_path(experiment.get('file_path'))
+        if relative_path and relative_path.startswith('/uploads/'):
+            local_path = relative_path.replace('/uploads/', '', 1).replace('/', os.sep)
+            absolute_path = os.path.join(Config.UPLOAD_FOLDER, local_path)
+            delete_file(absolute_path)
+
+        Experiment.delete(experiment_id)
+        return jsonify({'message': 'Experiment deleted successfully'}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

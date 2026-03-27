@@ -33,6 +33,11 @@ export const teacherAPI = {
     return response.data;
   },
 
+  deleteExperiment: async (experimentId) => {
+    const response = await axios.delete(`/teacher/experiment/${experimentId}`);
+    return response.data;
+  },
+
   // Attendance
   getDailyAttendance: async (labId, date) => {
     const response = await axios.get(`/teacher/attendance/daily/${labId}`, {

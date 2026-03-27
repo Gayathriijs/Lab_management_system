@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { teacherAPI } from '../../api/teacher';
 import Loading from '../../components/common/Loading';
 import Modal from '../../components/common/Modal';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import toast from 'react-hot-toast';
 import {
   BookOpen,
@@ -12,6 +13,7 @@ import {
   Sparkles,
   Download,
   Clock,
+  Trash2,
 } from 'lucide-react';
 
 const Experiments = () => {
@@ -21,7 +23,9 @@ const Experiments = () => {
   const [selectedLab, setSelectedLab] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [quizModalOpen, setQuizModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedExperiment, setSelectedExperiment] = useState(null);
+  const [experimentToDelete, setExperimentToDelete] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -112,6 +116,26 @@ const Experiments = () => {
     setQuizModalOpen(true);
   };
 
+  const openDeleteDialog = (experiment) => {
+    setExperimentToDelete(experiment);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteExperiment = async () => {
+    if (!experimentToDelete) return;
+
+    try {
+      await teacherAPI.deleteExperiment(experimentToDelete.id);
+      toast.success('Experiment deleted successfully');
+      loadExperiments();
+    } catch (error) {
+      const message = error?.response?.data?.error || 'Failed to delete experiment';
+      toast.error(message);
+    } finally {
+      setExperimentToDelete(null);
+    }
+  };
+
   if (loading) {
     return <Loading fullScreen message="Loading experiments..." />;
   }
@@ -199,6 +223,14 @@ const Experiments = () => {
                       <span>Download</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={() => openDeleteDialog(exp)}
+                    className="btn-danger text-sm flex items-center space-x-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -400,6 +432,20 @@ const Experiments = () => {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setExperimentToDelete(null);
+        }}
+        onConfirm={handleDeleteExperiment}
+        title="Delete Experiment"
+        message={`This will permanently delete "${experimentToDelete?.title || 'this experiment'}" and related quizzes, submissions, and output records. This action cannot be undone.`}
+        confirmText="Delete Permanently"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };
