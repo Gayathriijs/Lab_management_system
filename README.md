@@ -328,7 +328,7 @@ After running `seed_data.py`:
 
 ---
 
-## Trigger Extension (Optional)
+## Trigger Extension 
 
 If you want real-time DB-side attendance risk tracking, you can add a MySQL trigger extension:
 
