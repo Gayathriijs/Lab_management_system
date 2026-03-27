@@ -329,7 +329,7 @@ After running `seed_data.py`:
 
 ---
 
-## Trigger Extension 
+## Trigger 
 
 If you want real-time DB-side attendance risk tracking, you can add a MySQL trigger extension:
 
@@ -339,11 +339,10 @@ If you want real-time DB-side attendance risk tracking, you can add a MySQL trig
 - Mark alert `active` when attendance falls below threshold (for example 75%)
 - Mark alert `resolved` when attendance returns to threshold or above
 
-This extension is optional and can be added without changing application code paths.
 
 ---
 
-## View Extension
+## View 
 
 If you want a reusable SQL layer for experiment-level analytics, you can add an Experiment Progress view.
 
@@ -365,7 +364,6 @@ If you want a reusable SQL layer for experiment-level analytics, you can add an 
 3. Filter by `lab_id`, date, or experiment to serve targeted API responses.
 4. Use returned pre-aggregated columns (`total_submissions`, `avg_quiz_score`, `submission_coverage_pct`, etc.) directly in UI cards/charts.
 
-This reduces repeated JOIN + GROUP BY queries in routes and keeps response logic simpler and faster.
 
 Implementation note:
 
